@@ -1,4 +1,3 @@
-
 #include <IOKit/IOLib.h>
 #include <IOKit/IOBSD.h>
 
@@ -20,7 +19,7 @@
 // Define the superclass
 #define super IOBlockStorageDevice
 
-#define ZVOL_BSIZE	DEV_BSIZE
+#define ZVOL_BSIZE	(DEV_BSIZE*8)
 
 OSDefineMetaClassAndStructors(net_lundman_zfs_zvol_device,IOBlockStorageDevice)
 
