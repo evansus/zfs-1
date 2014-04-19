@@ -387,7 +387,7 @@ zfs_add_option(zfs_handle_t *zhp, char *options, int len,
 #endif
 
 static int
-zfs_add_options(zfs_handle_t *zhp, uint64_t *flags)
+zfs_add_options(zfs_handle_t *zhp, int *flags)
 {
 	int error = 0;
     char *source;
@@ -1383,6 +1383,13 @@ zpool_disable_datasets(zpool_handle_t *zhp, boolean_t force)
 		if (entry.mnt_fstype == NULL ||
 		    strncmp(entry.mnt_special, zhp->zpool_name, namelen) != 0 ||
 		    (entry.mnt_special[namelen] != '/' &&
+#ifdef __APPLE__
+		    /*
+		     * On OS X, '@' is possible too since we're temporarily
+		     * allowing manual snapshot mounting.
+		     */
+		    entry.mnt_special[namelen] != '@' &&
+#endif /* __APPLE__ */
 		    entry.mnt_special[namelen] != '\0'))
 			continue;
 
