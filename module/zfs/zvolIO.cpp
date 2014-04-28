@@ -9,6 +9,7 @@
 #include <sys/zvolIO.h>
 #include <IOKit/storage/IOBlockStorageDevice.h>
 #include <IOKit/storage/IOStorageProtocolCharacteristics.h>
+#include <IOKit/storage/IOStorageDeviceCharacteristics.h>
 
 /*
  * Device
@@ -42,7 +43,9 @@ bool net_lundman_zfs_zvol_device::init(zvol_state_t *c_zv,
 bool net_lundman_zfs_zvol_device::attach(IOService* provider)
 {
     OSDictionary		*	protocolCharacteristics = 0;
+    OSDictionary		*	deviceCharacteristics   = 0;
 	OSString			*	dataString				= 0;
+    OSNumber            *   dataNumber              = 0;
 
     if (super::attach(provider) == false)
         return false;
@@ -54,6 +57,8 @@ bool net_lundman_zfs_zvol_device::attach(IOService* provider)
      * We want to set some additional properties for ZVOLs, in
      * particular, "Virtual Device", and type "File" (or is Internal better?)
      * Finally "Generic" type.
+     *
+     * These properties are defined in *protocol* characteristics
      */
 
     protocolCharacteristics = OSDictionary::withCapacity(3);
@@ -73,7 +78,7 @@ bool net_lundman_zfs_zvol_device::attach(IOService* provider)
 
     dataString = OSString::withCString(kIOPropertyInterconnectFileKey);
     if (!dataString) {
-      IOLog( "PGPdiskDriver::createNub: could not create interconnect location string\n" );
+      IOLog( "could not create interconnect location string\n" );
       return true;
     }
     protocolCharacteristics->setObject(kIOPropertyPhysicalInterconnectLocationKey, dataString);
@@ -84,8 +89,56 @@ bool net_lundman_zfs_zvol_device::attach(IOService* provider)
     protocolCharacteristics->release();
     protocolCharacteristics = 0;
 
-    setProperty( kIOBlockStorageDeviceTypeKey, kIOBlockStorageDeviceTypeGeneric );
-
+    /*
+     * We want to set some additional properties for ZVOLs, in
+     * particular, physical block size of the underlying ZVOL,
+     * and logical block size presented by the virtual disk.
+     *
+     * These properties are defined in *device* characteristics
+     */
+    
+    deviceCharacteristics = OSDictionary::withCapacity(2);
+    if (!deviceCharacteristics) {
+        IOLog("failed to create dictionary for deviceCharacteristics.\n");
+        return true;
+    }
+    
+    dataNumber = OSNumber::withCString( zv->zv_volblocksize );
+    if (!dataNumber) {
+        IOLog( "could not create physical blocksize string\n" );
+        return true;
+    }
+    deviceCharacteristics->setObject(kIOPropertyPhysicalBlockSizeKey, dataNumber);
+    dataNumber->release();
+    dataNumber = 0;
+    
+    dataNumber = OSNumber::withCString( DEV_BSIZE );
+    if (!logicalBlockSize) {
+        IOLog( "could not create logical blocksize string\n" );
+        return true;
+    }
+    deviceCharacteristics->setObject(kIOPropertyLogicalBlockSizeKey, dataNumber);
+    dataNumber->release();
+    dataNumber = 0;
+    
+    setProperty( kIOPropertyDeviceCharacteristicsKey, protocolCharacteristics );
+    protocolCharacteristics->release();
+    protocolCharacteristics = 0;
+    
+    /*
+     * Finally "ZVOL" type, set as a device property
+     */
+    
+    //    setProperty( kIOBlockStorageDeviceTypeKey, kIOBlockStorageDeviceTypeGeneric );
+    dataString = OSString::withCString( "ZVOL" );
+    if (!dataString) {
+        IOLog( "could not create zvol device type string\n" );
+        return true;
+    }
+    setProperty( kIOBlockStorageDeviceTypeKey, dataString );
+    dataString->release();
+    dataString = 0;
+    
     return true;
 }
 
