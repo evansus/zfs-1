@@ -30,14 +30,17 @@
 #include <sys/spa.h>
 #include <sys/sunddi.h>
 
+#ifdef OPENSOLARIS_MOUNTROOT
 char *
 spa_get_bootprop(char *propname)
 {
 	char *value;
 
+
 	if (ddi_prop_lookup_string(DDI_DEV_T_ANY, ddi_root_node(),
 	    DDI_PROP_DONTPASS, propname, &value) != DDI_SUCCESS)
 		return (NULL);
+    
 	return (value);
 }
 
@@ -46,5 +49,6 @@ spa_free_bootprop(char *value)
 {
 	ddi_prop_free(value);
 }
+#endif
 
 #endif /* _KERNEL */

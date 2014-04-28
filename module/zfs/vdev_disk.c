@@ -372,6 +372,87 @@ vdev_disk_io_start(zio_t *zio)
     return (ZIO_PIPELINE_STOP);
 }
 
+#ifndef __APPLE__
+/*
+ * Given the root disk device devid or pathname, read the label from
+ * the device, and construct a configuration nvlist.
+ */
+int
+vdev_disk_read_rootlabel(char *devpath, char *devid, nvlist_t **config)
+{
+	ldi_handle_t vd_lh;
+	vdev_label_t *label;
+	uint64_t s, size;
+	int l;
+	ddi_devid_t tmpdevid;
+	int error = -1;
+	char *minor_name;
+    
+	/*
+	 * Read the device label and build the nvlist.
+	 */
+	if (devid != NULL && ddi_devid_str_decode(devid, &tmpdevid,
+                                              &minor_name) == 0) {
+		error = ldi_open_by_devid(tmpdevid, minor_name,
+                                  FREAD, kcred, &vd_lh, zfs_li);
+		ddi_devid_free(tmpdevid);
+		ddi_devid_str_free(minor_name);
+	}
+    
+	if (error && (error = ldi_open_by_name(devpath, FREAD, kcred, &vd_lh,
+                                           zfs_li)))
+		return (error);
+    
+	if (ldi_get_size(vd_lh, &s)) {
+		(void) ldi_close(vd_lh, FREAD, kcred);
+		return (SET_ERROR(EIO));
+	}
+    
+	size = P2ALIGN_TYPED(s, sizeof (vdev_label_t), uint64_t);
+	label = kmem_alloc(sizeof (vdev_label_t), KM_SLEEP);
+    
+	*config = NULL;
+	for (l = 0; l < VDEV_LABELS; l++) {
+		uint64_t offset, state, txg = 0;
+        
+		/* read vdev label */
+		offset = vdev_label_offset(size, l, 0);
+		if (vdev_disk_ldi_physio(vd_lh, (caddr_t)label,
+                                 VDEV_SKIP_SIZE + VDEV_PHYS_SIZE, offset, B_READ) != 0)
+			continue;
+        
+		if (nvlist_unpack(label->vl_vdev_phys.vp_nvlist,
+                          sizeof (label->vl_vdev_phys.vp_nvlist), config, 0) != 0) {
+			*config = NULL;
+			continue;
+		}
+        
+		if (nvlist_lookup_uint64(*config, ZPOOL_CONFIG_POOL_STATE,
+                                 &state) != 0 || state >= POOL_STATE_DESTROYED) {
+			nvlist_free(*config);
+			*config = NULL;
+			continue;
+		}
+        
+		if (nvlist_lookup_uint64(*config, ZPOOL_CONFIG_POOL_TXG,
+                                 &txg) != 0 || txg == 0) {
+			nvlist_free(*config);
+			*config = NULL;
+			continue;
+		}
+        
+		break;
+	}
+    
+	kmem_free(label, sizeof (vdev_label_t));
+	(void) ldi_close(vd_lh, FREAD, kcred);
+	if (*config == NULL)
+		error = SET_ERROR(EIDRM);
+    
+	return (error);
+}
+#endif
+
 static void
 vdev_disk_io_done(zio_t *zio)
 {
