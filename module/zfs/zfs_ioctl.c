@@ -6116,7 +6116,9 @@ zfs_ioctl_init(void)
     zfs_major = cdevsw_add_with_bdev(-1, &zfs_cdevsw, zfs_bmajor);
     dev = makedev(zfs_major, 0);/* Get the device number */
 #ifdef __APPLE__
+#if 0
     (void) mnttab_file_create();
+#endif
 #endif
 
     //printf("ZFS ioctl setup. major %d, bmajor %d, dev %d\n",

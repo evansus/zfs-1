@@ -1667,7 +1667,9 @@ spa_init(int mode)
 	zfs_prop_init();
 	zpool_prop_init();
 	zpool_feature_init();
+#if 0
 	spa_config_load();
+#endif
 	l2arc_start();
 }
 
