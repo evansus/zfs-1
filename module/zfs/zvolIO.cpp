@@ -103,7 +103,7 @@ bool net_lundman_zfs_zvol_device::attach(IOService* provider)
         return true;
     }
     
-    dataNumber = OSNumber::withCString( zv->zv_volblocksize );
+    dataNumber = OSNumber::withNumber( zv->zv_volblocksize, sizeof(zv->zv_volblocksize) );
     if (!dataNumber) {
         IOLog( "could not create physical blocksize string\n" );
         return true;
@@ -112,8 +112,8 @@ bool net_lundman_zfs_zvol_device::attach(IOService* provider)
     dataNumber->release();
     dataNumber = 0;
     
-    dataNumber = OSNumber::withCString( DEV_BSIZE );
-    if (!logicalBlockSize) {
+    dataNumber = OSNumber::withNumber( DEV_BSIZE, sizeof(DEV_BSIZE) );
+    if (!dataNumber) {
         IOLog( "could not create logical blocksize string\n" );
         return true;
     }
@@ -121,9 +121,9 @@ bool net_lundman_zfs_zvol_device::attach(IOService* provider)
     dataNumber->release();
     dataNumber = 0;
     
-    setProperty( kIOPropertyDeviceCharacteristicsKey, protocolCharacteristics );
-    protocolCharacteristics->release();
-    protocolCharacteristics = 0;
+    setProperty( kIOPropertyDeviceCharacteristicsKey, deviceCharacteristics );
+    deviceCharacteristics->release();
+    deviceCharacteristics = 0;
     
     /*
      * Finally "ZVOL" type, set as a device property
@@ -178,7 +178,7 @@ bool net_lundman_zfs_zvol_device::handleOpen( IOService *client,
                                               IOOptionBits options,
                                               void *argument)
 {
-  IOStorageAccess access = (IOStorageAccess) (uint64_t) argument;
+  IOStorageAccess access = (*(IOStorageAccess*)argument);
 
   dprintf("open\n");
 
