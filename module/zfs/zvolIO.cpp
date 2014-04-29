@@ -45,8 +45,8 @@ bool net_lundman_zfs_zvol_device::attach(IOService* provider)
     OSDictionary		*	protocolCharacteristics = 0;
     OSDictionary		*	deviceCharacteristics   = 0;
 	OSString			*	dataString				= 0;
-    OSNumber            *   dataNumber              = 0;
-    int                     zvol_bsize              = DEV_BSIZE;
+    //OSNumber            *   dataNumber              = 0;
+    //uint64_t                num                     = 0;
 
     if (super::attach(provider) == false)
         return false;
@@ -92,8 +92,9 @@ bool net_lundman_zfs_zvol_device::attach(IOService* provider)
 
     /*
      * We want to set some additional properties for ZVOLs, in
-     * particular, physical block size of the underlying ZVOL,
-     * and logical block size presented by the virtual disk.
+     * particular, logical block size (volblocksize) of the
+     * underlying ZVOL, and 'physical' block size presented by
+     * the virtual disk.
      *
      * These properties are defined in *device* characteristics
      */
@@ -104,41 +105,43 @@ bool net_lundman_zfs_zvol_device::attach(IOService* provider)
         return true;
     }
     
-    dataNumber = OSNumber::withNumber( zv->zv_volblocksize, sizeof(zv->zv_volblocksize) );
-    if (!dataNumber) {
-        IOLog( "could not create physical blocksize string\n" );
-        return true;
-    }
-    deviceCharacteristics->setObject(kIOPropertyPhysicalBlockSizeKey, dataNumber);
-    dataNumber->release();
-    dataNumber = 0;
+//    num = ZVOL_BSIZE;
+    // No ref held by this pointer
+//    dataNumber =    OSDynamicCast( OSNumber, num );
+    deviceCharacteristics->setObject(kIOPropertyPhysicalBlockSizeKey,
+                                OSNumber::withNumber(ZVOL_BSIZE,8*sizeof(ZVOL_BSIZE)) );
     
-    dataNumber = OSNumber::withNumber( zvol_bsize, sizeof(zvol_bsize) );
-    if (!dataNumber) {
-        IOLog( "could not create logical blocksize string\n" );
-        return true;
-    }
-    deviceCharacteristics->setObject(kIOPropertyLogicalBlockSizeKey, dataNumber);
-    dataNumber->release();
-    dataNumber = 0;
+    IOLog( "physicalBlockSize %llu\n", OSNumber::withNumber(ZVOL_BSIZE,
+                                                          8*sizeof(ZVOL_BSIZE))->unsigned64BitValue());
+
+//    num = zv->zv_volblocksize;
+    // No ref held by this pointer
+//    dataNumber =    OSDynamicCast( OSNumber, (zv->zv_volblocksize) )
+    deviceCharacteristics->setObject(kIOPropertyLogicalBlockSizeKey,
+                                     OSNumber::withNumber(zv->zv_volblocksize,8*sizeof(zv->zv_volblocksize)) );
     
-    setProperty( kIOPropertyDeviceCharacteristicsKey, protocolCharacteristics );
-    protocolCharacteristics->release();
-    protocolCharacteristics = 0;
+    IOLog( "logicalBlockSize %llu\n", OSNumber::withNumber(zv->zv_volblocksize,
+                                                         8*sizeof(zv->zv_volblocksize))->unsigned64BitValue());
+    
+    setProperty( kIOPropertyDeviceCharacteristicsKey, deviceCharacteristics );
+    deviceCharacteristics->release();
+    deviceCharacteristics = 0;
     
     /*
      * Finally "ZVOL" type, set as a device property
      */
     
     //    setProperty( kIOBlockStorageDeviceTypeKey, kIOBlockStorageDeviceTypeGeneric );
+/*
     dataString = OSString::withCString( "ZVOL" );
     if (!dataString) {
         IOLog( "could not create zvol device type string\n" );
         return true;
     }
-    setProperty( kIOBlockStorageDeviceTypeKey, dataString );
-    dataString->release();
-    dataString = 0;
+ */
+    setProperty( kIOBlockStorageDeviceTypeKey, kIOBlockStorageDeviceTypeGeneric );
+//    dataString->release();
+//    dataString = 0;
     
     return true;
 }
