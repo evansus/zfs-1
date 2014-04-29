@@ -46,6 +46,7 @@ bool net_lundman_zfs_zvol_device::attach(IOService* provider)
     OSDictionary		*	deviceCharacteristics   = 0;
 	OSString			*	dataString				= 0;
     OSNumber            *   dataNumber              = 0;
+    int                     zvol_bsize              = DEV_BSIZE;
 
     if (super::attach(provider) == false)
         return false;
@@ -103,7 +104,7 @@ bool net_lundman_zfs_zvol_device::attach(IOService* provider)
         return true;
     }
     
-    dataNumber = OSNumber::withCString( zv->zv_volblocksize );
+    dataNumber = OSNumber::withNumber( zv->zv_volblocksize, sizeof(zv->zv_volblocksize) );
     if (!dataNumber) {
         IOLog( "could not create physical blocksize string\n" );
         return true;
@@ -112,8 +113,8 @@ bool net_lundman_zfs_zvol_device::attach(IOService* provider)
     dataNumber->release();
     dataNumber = 0;
     
-    dataNumber = OSNumber::withCString( DEV_BSIZE );
-    if (!logicalBlockSize) {
+    dataNumber = OSNumber::withNumber( zvol_bsize, sizeof(zvol_bsize) );
+    if (!dataNumber) {
         IOLog( "could not create logical blocksize string\n" );
         return true;
     }
