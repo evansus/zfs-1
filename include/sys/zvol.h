@@ -130,9 +130,8 @@ extern int      zvolCreateNewDevice(zvol_state_t *zv);
 extern int      zvolSetVolsize(zvol_state_t *zv);
 
 extern int zvol_busy(void);
-extern void zfs_ereport_zvol_post(const char *subclass, spa_t *spa,
+extern void zfs_ereport_zvol_post(const char *subclass, const char *name,
                                   const char *bsd, const char *rbsd);
-
 
 
 #endif /* _KERNEL */
