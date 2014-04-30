@@ -50,7 +50,9 @@ unsigned int zfs_vnop_vdev_ashift = 0;
  * Virtual device vector for disks.
  */
 
-#ifndef __APPLE__
+#ifdef __OPPLE__
+extern iokit_ident_t zfs_li;
+#elseifndef __APPLE__
 extern ldi_ident_t zfs_li;
 
 typedef struct vdev_disk_buf {
@@ -372,7 +374,6 @@ vdev_disk_io_start(zio_t *zio)
     return (ZIO_PIPELINE_STOP);
 }
 
-#ifndef __APPLE__
 /*
  * Given the root disk device devid or pathname, read the label from
  * the device, and construct a configuration nvlist.
@@ -380,7 +381,11 @@ vdev_disk_io_start(zio_t *zio)
 int
 vdev_disk_read_rootlabel(char *devpath, char *devid, nvlist_t **config)
 {
+#ifdef __OPPLE__
+    iokit_handle_t vd_lh;
+#elseifndef __APPLE__
 	ldi_handle_t vd_lh;
+#endif
 	vdev_label_t *label;
 	uint64_t s, size;
 	int l;
@@ -391,6 +396,16 @@ vdev_disk_read_rootlabel(char *devpath, char *devid, nvlist_t **config)
 	/*
 	 * Read the device label and build the nvlist.
 	 */
+#ifdef __OPPLE__
+	if (devid != NULL) {
+        error = iokit_open_by_devid(devid, FREAD, &vd_lh);
+    }
+    
+    if (error && (error = iokit_open_by_name(devpath, FREAD, &vd_lh)))
+		return (error);
+    
+    iokit_get_size(vd_lh, &s);
+#elseifndef __APPLE__
 	if (devid != NULL && ddi_devid_str_decode(devid, &tmpdevid,
                                               &minor_name) == 0) {
 		error = ldi_open_by_devid(tmpdevid, minor_name,
@@ -407,6 +422,7 @@ vdev_disk_read_rootlabel(char *devpath, char *devid, nvlist_t **config)
 		(void) ldi_close(vd_lh, FREAD, kcred);
 		return (SET_ERROR(EIO));
 	}
+#endif
     
 	size = P2ALIGN_TYPED(s, sizeof (vdev_label_t), uint64_t);
 	label = kmem_alloc(sizeof (vdev_label_t), KM_SLEEP);
@@ -417,9 +433,15 @@ vdev_disk_read_rootlabel(char *devpath, char *devid, nvlist_t **config)
         
 		/* read vdev label */
 		offset = vdev_label_offset(size, l, 0);
+#ifdef __OPPLE__
+        if (vdev_disk_iokit_physio(vd_lh, (caddr_t)label,
+                                 VDEV_SKIP_SIZE + VDEV_PHYS_SIZE, offset, B_READ) != 0)
+			continue;
+#elseifndef __APPLE__
 		if (vdev_disk_ldi_physio(vd_lh, (caddr_t)label,
                                  VDEV_SKIP_SIZE + VDEV_PHYS_SIZE, offset, B_READ) != 0)
 			continue;
+#endif
         
 		if (nvlist_unpack(label->vl_vdev_phys.vp_nvlist,
                           sizeof (label->vl_vdev_phys.vp_nvlist), config, 0) != 0) {
@@ -445,13 +467,16 @@ vdev_disk_read_rootlabel(char *devpath, char *devid, nvlist_t **config)
 	}
     
 	kmem_free(label, sizeof (vdev_label_t));
+#ifdef __OPPLE__
+    (void) iokit_close(vd_lh, FREAD);
+#elseifndef __APPLE__
 	(void) ldi_close(vd_lh, FREAD, kcred);
+#endif
 	if (*config == NULL)
 		error = SET_ERROR(EIDRM);
     
 	return (error);
 }
-#endif
 
 static void
 vdev_disk_io_done(zio_t *zio)
