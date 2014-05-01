@@ -19,6 +19,20 @@
 #include <IOKit/IOTypes.h>
 #include <IOKit/IOBufferMemoryDescriptor.h>
 #include <pexpert/pexpert.h>
+
+#include <libkern/version.h>
+#include <libkern/sysctl.h>
+
+extern "C" {
+    
+#include <sys/zfs_ioctl.h>
+
+#include <sys/zfs_znode.h>
+#include <sys/zvol.h>
+
+#include <sys/zfs_vnops.h>
+#include <sys/taskq.h>
+
 #include <sys/param.h>
 #include <sys/nvpair.h>
 #include <sys/vdev.h>
@@ -218,7 +232,6 @@ IOLog("ZFS::init\n");
 void net_lundman_zfs_zvol::free (void)
 {
 IOLog("ZFS::free\n");
-    global_c_interface = NULL;
     super::free();
 }
 
@@ -256,7 +269,6 @@ IOLog("ZFS: Loading module ... \n");
      * speaking not used by SPL, but by ZFS. ZFS should really start it?
      */
     system_taskq_init();
-
 
     /*
      * hostid is left as 0 on OSX, and left to be set if developers wish to
@@ -373,10 +385,6 @@ bool net_lundman_zfs_zvol::zfs_check_mountroot()
     return result;
     
 }
-
-/* TO DO */
-/* Move this to zfs_boot.cpp */
-#include <sys/zfs_ioctl.h>
 
 #define error_delay 2000
 #define info_delay 50
@@ -548,6 +556,7 @@ IOSleep( error_delay );
     
     //    if ( split > 0 && split < strlen(zfs_boot) ) {
     if ( strptr > zfs_boot ) {
+//strpbrk(search.spa_name, "/@")
         strlcpy( zfs_pool, zfs_boot, split+1 );
         strlcpy( zfs_root, strptr+1, strlen(strptr) );
     } else {
@@ -732,7 +741,7 @@ IOSleep( error_delay );
             
 IOLog( "BSD path: %s\n", diskPath );
 IOSleep( info_delay );
-            
+        
         /*
          *
          * Finally, check the disk for bootpool nvlist
@@ -749,10 +758,13 @@ IOSleep( info_delay );
         IOBufferMemoryDescriptor* buffer = 0;
         nvlist_t * config = 0;
 
-        nvlist_t *nvtop, *nvroot;
+        nvlist_t *nvtop, *nvroot, **child;
         uint64_t pgid, guid;
+        uint_t children;
+        spa_t * spa;
         
-        char * pool_name;
+        char * pool_name = 0;
+        char * tmpPath = 0;
         vdev_label_t * label;
         uint64_t s, size;
         int l;
@@ -819,6 +831,8 @@ IOSleep( error_delay );
         
         config = NULL;
         for (l = 0; l < VDEV_LABELS; l++) {
+            nvlist_t * bestconfig = 0;
+            uint64_t besttxg = 0;
             uint64_t offset, state, txg = 0;
             
             /* read vdev label */
@@ -906,9 +920,15 @@ IOSleep( info_delay );
 
 IOLog("zfs_mountroot: Pool txg %s: %llu\n", pool_name, txg);
 IOSleep( info_delay );
-
-            /* Found a valid config */
-            break;
+            
+            if ( txg > besttxg ) {
+                nvlist_free(bestconfig);
+                besttxg = txg;
+                bestconfig = config;
+                
+                /* Found a valid config, keep looping */
+                break;
+            }
         }
         
 IOLog("zfs_mountroot: Freeing label %p\n", label);
@@ -934,7 +954,7 @@ IOSleep( info_delay );
                                     ZPOOL_CONFIG_POOL_GUID, &pgid) == 0);
         VERIFY(nvlist_lookup_uint64(config,
                                     ZPOOL_CONFIG_GUID, &guid) == 0);
-        
+    
 IOLog("zfs_mountroot: Pool guids %s, %llu, %llu\n", pool_name, pgid, guid);
 IOSleep( info_delay );
 IOLog("zfs_mountroot: Adding top-level vdevs to root vdev %p\n", label);
@@ -943,19 +963,115 @@ IOSleep( info_delay );
         /*
          * Put this pool's top-level vdevs into a root vdev.
          */
+        /*  KM_PUSHPAGE instead of KM_SLEEP? */
+        
         VERIFY(nvlist_alloc(&nvroot,
                             NV_UNIQUE_NAME, KM_SLEEP) == 0);
+//VDEV_TYPE_DISK
         VERIFY(nvlist_add_string(nvroot,
                                  ZPOOL_CONFIG_TYPE, VDEV_TYPE_ROOT) == 0);
         VERIFY(nvlist_add_uint64(nvroot,
                                  ZPOOL_CONFIG_ID, 0ULL) == 0);
+        
         VERIFY(nvlist_add_uint64(nvroot,
                                  ZPOOL_CONFIG_GUID, pgid) == 0);
-        VERIFY(nvlist_add_nvlist_array(nvroot,
-                                       ZPOOL_CONFIG_CHILDREN, &nvtop, 1) == 0);
+        /*
+         * The last thing to do is add the vdev guid -> path
+         * mappings so that we can fix up the configuration
+         * as necessary before doing the import.
+         */
+        /*
+         
+         pool_list_t *pl;
+         
+        if ( pl == NULL ) {
+            if( ( pl = kmem_alloc(sizeof(pool_list_t),KM_PUSHPAGE)) == NULL ) {
+IOLog( "Couldn't allocate a pool_list_t for pool list" );
+IOSleep(error_delay);
+                return false;
+            }
+            
+            pl.ne_guid = 0;
+            pl.ne_order = 0;
+            pl.ne_next = NULL;
+            pl.names = NULL;
+        }
+        
+         name_entry_t *ne;
+         
+        if ((ne = kmem_alloc(sizeof (name_entry_t),KM_PUSHPAGE)) == NULL) {
+IOLog( "Couldn't allocate a name_entry for current vdev" );
+IOSleep(error_delay);
+        }
+        
+        if ((ne->ne_name = zfs_strdup(hdl, path)) == NULL) {
+            free(ne);
+            return (-1);
+        }
+        
+        ne->ne_guid = guid;
+        ne->ne_order = order;
+        ne->ne_next = pl->names;
+        pl->names = ne;
+        */
+
+        /*
+//        if (nvlist_lookup_string(nv, ZPOOL_CONFIG_PATH, &path) != 0)
+//            path = NULL;
+//        if (nvlist_add_string(nv, ZPOOL_CONFIG_PATH, best->ne_name) != 0)
+//            return (-1);
+
+//        VERIFY(nvlist_add_nvlist_array(nvroot,
+//                                       ZPOOL_CONFIG_CHILDREN, &nvtop, 1) == 0);
+        
+//      Adjust the vdev path accordingly
+//        fix_paths(config, pl);
+         */
+        
+        if (nvlist_lookup_nvlist_array(nvroot, ZPOOL_CONFIG_CHILDREN,
+                                       &child, &children) == 0) {
+            for (int c = 0; c < children; c++)
+            {
+                if (child[c] && nvlist_add_string(child[c],
+                                  ZPOOL_CONFIG_PATH, diskPath) == 0) {
+                    if(nvlist_lookup_string(child[c], ZPOOL_CONFIG_PATH, &tmpPath) != 0) {
+IOLog("zfs_mountroot: failed to fix path for child vdev %p", child[c]);
+IOSleep(error_delay);
+                    }
+                }
+            }
+        } else {
+            if(nvlist_lookup_string(nvtop, ZPOOL_CONFIG_PATH, &tmpPath) != 0) {
+IOLog("zfs_mountroot: tmpPath before is %s\n", tmpPath);
+IOSleep(info_delay);
+            }
+            if(nvlist_lookup_string(nvtop, ZPOOL_CONFIG_PHYS_PATH, &tmpPath) != 0) {
+IOLog("zfs_mountroot: physPath before is %s\n", tmpPath);
+IOSleep(info_delay);
+            }
+            if (nvlist_add_string(nvtop, ZPOOL_CONFIG_PATH, diskPath) == 0) {
+                if(nvlist_lookup_string(nvtop, ZPOOL_CONFIG_PATH, &tmpPath) != 0) {
+IOLog("zfs_mountroot: failed to fix path for root vdev %s", diskPath);
+IOSleep(error_delay);
+                } else {
+IOLog("zfs_mountroot: tmpPath after is %s\n", tmpPath);
+IOSleep(info_delay);
+                }
+                if(nvlist_lookup_string(nvtop, ZPOOL_CONFIG_PHYS_PATH, &tmpPath) != 0) {
+IOLog("zfs_mountroot: physPath after is %s\n", tmpPath);
+IOSleep(info_delay);
+                }
+            }
+            
+
+        }
         
 IOLog("zfs_mountroot: vdev guid %s, %llu, %llu\n", pool_name, pgid, guid);
 IOSleep( info_delay );
+        
+        
+        VERIFY(nvlist_add_nvlist_array(nvroot,
+                                       ZPOOL_CONFIG_CHILDREN, &nvtop, 1) == 0);
         
         /*
          * Replace the existing vdev_tree with the new root vdev in
@@ -963,6 +1079,8 @@ IOSleep( info_delay );
          */
 IOLog("zfs_mountroot: nvlist shuffle %s\n", pool_name);
 IOSleep( info_delay );
+        
+
         VERIFY(nvlist_add_nvlist(config,
                                  ZPOOL_CONFIG_VDEV_TREE, nvroot) == 0);
         nvlist_free(nvroot);
@@ -973,28 +1091,89 @@ IOSleep( info_delay );
         /* If the rootlabel has been found, try to import the pool */
         if ( error != 0 && config ) {
             
-IOLog("zfs_mountroot: Importing pool %s\n", pool_name);
+            
+            /*
+IOLog("zfs_mountroot: entering mutex %s...\n", pool_name);
+IOSleep( info_delay );
+            mutex_enter(&spa_namespace_lock);
+IOLog("zfs_mountroot: Opening pool config %s...\n", pool_name);
+IOSleep( info_delay );
+            spa = spa_add(pool_name, config, NULL);
+            spa->spa_is_root = B_TRUE;
+            spa->spa_import_flags = ZFS_IMPORT_VERBATIM;
+            
+IOLog("zfs_mountroot: exiting mutex %s...\n", pool_name);
+IOSleep( info_delay );
+            mutex_exit(&spa_namespace_lock);
+            
+IOLog("zfs_mountroot: Trying to importing pool %s...\n", pool_name);
 IOSleep( info_delay );
             
-            result = spa_import(pool_name, config,  NULL, ZFS_IMPORT_VERBATIM );
+            config = spa_tryimport( config );
             
-IOLog("zfs_mountroot: May have imported pool %s!\n", pool_name);
+            if ( config ) {
+IOLog("zfs_mountroot: Tryimport succeeded %s\n", pool_name);
 IOSleep( info_delay );
+            } else {
+IOLog("zfs_mountroot: Tryimport failed %s\n", pool_name);
+IOSleep( info_delay );
+            }
+            */
             
-            if ( ! result ) {
-IOLog("zfs_mountroot: Failure importing pool %s!\n", pool_name);
-IOSleep( error_delay );
+/*
+ #define	ZFS_IMPORT_NORMAL	0x0
+ #define	ZFS_IMPORT_VERBATIM	0x1
+ #define	ZFS_IMPORT_ANY_HOST	0x2
+ #define	ZFS_IMPORT_MISSING_LOG	0x4
+ #define	ZFS_IMPORT_ONLY		0x8
+ #define	ZFS_IMPORT_TEMP_NAME	0x10
+ */
+/*
+ * (ZFS_IMPORT_VERBATIM | ZFS_IMPORT_ONLY |
+ *  ZFS_IMPORT_ANY_HOST | ZFS_IMPORT_MISSING_LOG )
+ */
+
+            nvlist_t * newconfig = spa_tryimport(config);
+            
+            if ( newconfig ) {
+                nvlist_free(config);
+                config = newconfig;
+IOLog("zfs_mountroot: Using tryimport config %s\n", pool_name);
+IOSleep( info_delay );
+                
+                uint64_t importFlags =   ( ZFS_IMPORT_ONLY | ZFS_IMPORT_ANY_HOST |
+                                          ZFS_IMPORT_MISSING_LOG );
+                result = spa_import(pool_name, config,  NULL, importFlags  );
+                
+                IOLog("zfs_mountroot: May have imported pool %s: %d\n", pool_name, result);
+                IOSleep( info_delay );
+
+                if ( ! result ) {
+                    IOLog("zfs_mountroot: Failure importing pool %s!\n", pool_name);
+                    IOSleep( error_delay );
+                }
             }
             
-            spa_t * spa = NULL;
-            result = spa_open(pool_name, &spa, FTAG);
+            spa_t *list = spa_by_guid(pgid, guid);
             
-            if (!result) {
-IOLog("zfs_mountroot: Failure opening pool %s!\n", pool_name);
+            if( list ) {
+IOLog("zfs_mountroot: pool seems to be imported %p\n", list);
 IOSleep( error_delay );
+                result = true;
+            } else {
+IOLog("zfs_mountroot: Couldn't locate pool by guid / vdev_guid %s\n", pool_name);
+IOSleep( error_delay );
+                result = false;
             }
             
-            result = true;
+//            spa_t * spa = NULL;
+//            result = spa_open(pool_name, &spa, FTAG);
+            
+//            if (!result) {
+//IOLog("zfs_mountroot: Failure opening pool %s!\n", pool_name);
+//IOSleep( error_delay );
+//            }
+            
             goto nextDisk;
 
         }
