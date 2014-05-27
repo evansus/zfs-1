@@ -44,9 +44,10 @@ bool net_lundman_zfs_zvol_device::attach(IOService* provider)
 {
     OSDictionary		*	protocolCharacteristics = 0;
     OSDictionary		*	deviceCharacteristics   = 0;
+    OSDictionary		*	storageFeatures			= 0;
+	OSBoolean			*	unmapFeature			= 0;
 	OSString			*	dataString				= 0;
     OSNumber			*	dataNumber				= 0;
-    uint64_t                minSegmentSize          = 0;
 
     if (super::attach(provider) == false)
         return false;
@@ -99,7 +100,7 @@ bool net_lundman_zfs_zvol_device::attach(IOService* provider)
      * These properties are defined in *device* characteristics
      */
     
-    deviceCharacteristics = OSDictionary::withCapacity(2);
+    deviceCharacteristics = OSDictionary::withCapacity(3);
     if (!deviceCharacteristics) {
         IOLog("failed to create dictionary for deviceCharacteristics.\n");
         return true;
@@ -110,26 +111,51 @@ bool net_lundman_zfs_zvol_device::attach(IOService* provider)
     deviceCharacteristics->setObject(kIOPropertyPhysicalBlockSizeKey, dataNumber);
 dprintf( "physicalBlockSize %llu\n", dataNumber->unsigned64BitValue());
     dataNumber->release();
-    dataNumber = 0;
+    dataNumber	= 0;
     
     /* Set logical block size to match volblocksize property */
     dataNumber =    OSNumber::withNumber(zv->zv_volblocksize,8*sizeof(zv->zv_volblocksize));
     deviceCharacteristics->setObject(kIOPropertyLogicalBlockSizeKey, dataNumber);
 dprintf( "logicalBlockSize %llu\n", dataNumber->unsigned64BitValue());
     dataNumber->release();
-    dataNumber = 0;
+    dataNumber	= 0;
     
     /* Set physical bytes per sector to match volblocksize property */
     dataNumber =    OSNumber::withNumber((uint64_t)(8*ZVOL_BSIZE),8*sizeof(uint64_t));
     deviceCharacteristics->setObject(kIOPropertyBytesPerPhysicalSectorKey, dataNumber);
     dprintf( "physicalBytesPerSector %llu\n", dataNumber->unsigned64BitValue());
     dataNumber->release();
-    dataNumber = 0;
+    dataNumber	= 0;
     
     /* Apply these characteristics */
     setProperty( kIOPropertyDeviceCharacteristicsKey, deviceCharacteristics );
     deviceCharacteristics->release();
-    deviceCharacteristics = 0;
+    deviceCharacteristics	= 0;
+
+	/*
+     * Zvol unmap (experimental) support
+	 *  Possibly as a property / sysctl
+     *
+     * These properties are defined in IOStorageFeatures
+     */
+
+	storageFeatures =	OSDictionary::withCapacity(1);
+	if (!storageFeatures) {
+        IOLog("failed to create dictionary for storageFeatures.\n");
+        return true;
+    }
+
+	/* Set unmap feature */
+	unmapFeature =	OSBoolean::withBoolean(true);
+    storageFeatures->setObject(kIOStorageFeatureUnmap, unmapFeature);
+	unmapFeature->release();
+	unmapFeature	= 0;
+
+	/* Apply these storage features */
+    setProperty( kIOStorageFeaturesKey, storageFeatures );
+    storageFeatures->release();
+    storageFeatures	= 0;
+
 
     /*
      * Set transfer limits:
@@ -152,8 +178,10 @@ dprintf( "logicalBlockSize %llu\n", dataNumber->unsigned64BitValue());
      * Set Minimum transfer segment size if the block size is smaller than 4k
      */
 /*
+     uint64_t                minSegmentSize          = 0;
     if( zv->zv_volblocksize > 4096 ) {
         setProperty( kIOMinimumSegmentAlignmentByteCountKey, 1, 1 );
+
 
 //        minSegmentSize = zv->zv_volblocksize / ( ZVOL_BSIZE * 4 );
         // Minimum is the default of 4
@@ -347,9 +375,36 @@ IOReturn net_lundman_zfs_zvol_device::doAsyncReadWrite(
     return kIOReturnSuccess;
 }
 
+IOReturn
+net_lundman_zfs_zvol_device::doDiscard(UInt64 block, UInt64 nblks)
+{
+	IOLog("doDiscard called with (%llu) block and numblocks (%u)\n", (uint64_t)block, (uint32_t)nblks);
+	return kIOReturnUnsupported;
+}
 
 
+IOReturn
+net_lundman_zfs_zvol_device::doUnmap( IOBlockStorageDeviceExtent *extents, UInt32 extentsCount, UInt32 options = 0)
+{
+	UInt32 i = 0;
+	IOReturn result;
 
+IOLog("doUnmap called with (%u) extents and options (%u)\n", (uint32_t)extentsCount, (uint32_t)options);
+
+	if (options > 0) {
+IOLog("doUnmap called with (%u) extents and options (%u)\n", (uint32_t)extentsCount, (uint32_t)options);
+        return kIOReturnUnsupported;
+	}
+
+	for (i = 0; i < extentsCount; i++) {
+		result = doDiscard(extents[i].blockStart, extents[i].blockCount);
+		if (result != kIOReturnSuccess) {
+			return result;
+		}
+	}
+
+    return kIOReturnSuccess;
+}
 UInt32 net_lundman_zfs_zvol_device::doGetFormatCapacities(UInt64* capacities,
                                                           UInt32 capacitiesMaxCount) const
 {
@@ -433,7 +488,7 @@ IOReturn net_lundman_zfs_zvol_device::doEjectMedia(void)
 
 IOReturn  net_lundman_zfs_zvol_device::doFormatMedia(UInt64 byteCapacity)
 {
-    dprintf("doFormat\n");
+    IOLog("doFormat\n");
     return kIOReturnSuccess;
 }
 
@@ -445,7 +500,7 @@ IOReturn  net_lundman_zfs_zvol_device::doLockUnlockMedia(bool doLock)
 
 IOReturn  net_lundman_zfs_zvol_device::doSynchronizeCache(void)
 {
-    dprintf("doSync\n");
+    IOLog("doSync\n");
     if (zv && zv->zv_zilog) {
 		zil_commit(zv->zv_zilog, ZVOL_OBJ);
     }
