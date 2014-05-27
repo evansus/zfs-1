@@ -1874,6 +1874,57 @@ zvol_write_iokit(zvol_state_t *zv, uint64_t position,
 	return (error);
 }
 
+int
+zvol_unmap(zvol_state_t *zv, uint64_t off, uint64_t bytes)
+{
+	rl_t *rl			= 0;
+	dmu_tx_t *tx		= 0;
+	uint64_t volsize	= 0;
+	int error			= 0;
+	boolean_t sync;
+
+	if (zv == NULL)
+		return (ENXIO);
+
+	volsize = zv->zv_volsize;
+
+	if (bytes > volsize - off)	/* don't write past the end */
+		bytes = volsize - off;
+
+	sync = !(zv->zv_flags & ZVOL_WCE) ||
+	(zv->zv_objset->os_sync == ZFS_SYNC_ALWAYS);
+
+	rl = zfs_range_lock(&zv->zv_znode, off, bytes, RL_WRITER);
+
+	tx = dmu_tx_create(zv->zv_objset);
+
+	dmu_tx_hold_write(tx, ZVOL_OBJ, off, bytes);
+
+	error = dmu_tx_assign(tx, TXG_WAIT);
+
+	if (error) {
+		dmu_tx_abort(tx);
+		goto error;
+	}
+
+//	error = dmu_free_long_range(zv->zv_objset, ZVOL_OBJ, off, bytes);
+	error =	dmu_free_range(zv->zv_objset, ZVOL_OBJ, off, bytes, tx);
+
+	if (error == 0)
+		zvol_log_write(zv, tx, off, bytes, sync);
+
+	dmu_tx_commit(tx);
+
+error:
+
+	zfs_range_unlock(rl);
+
+	if (sync)
+		zil_commit(zv->zv_zilog, ZVOL_OBJ);
+
+	return error;
+}
+
 
 int
 zvol_getefi(void *arg, int flag, uint64_t vs, uint8_t bs)

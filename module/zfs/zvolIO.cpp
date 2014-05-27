@@ -378,8 +378,16 @@ IOReturn net_lundman_zfs_zvol_device::doAsyncReadWrite(
 IOReturn
 net_lundman_zfs_zvol_device::doDiscard(UInt64 block, UInt64 nblks)
 {
-	IOLog("doDiscard called with (%llu) block and numblocks (%u)\n", (uint64_t)block, (uint32_t)nblks);
-	return kIOReturnUnsupported;
+//IOLog("doDiscard called with block, nblks (%llu, %llu)\n", block, nblks);
+	uint64_t bytes		= 0;
+	uint64_t off		= 0;
+
+	/* Convert block/nblks to offset/bytes */
+	off =	block * ZVOL_BSIZE;
+	bytes =	nblks * ZVOL_BSIZE;
+//IOLog("calling zvol_unmap with offset, bytes (%llu, %llu)\n", off, bytes);
+
+	return (zvol_unmap(zv, off, bytes) == 0 ? kIOReturnSuccess : kIOReturnError);
 }
 
 
@@ -389,10 +397,10 @@ net_lundman_zfs_zvol_device::doUnmap( IOBlockStorageDeviceExtent *extents, UInt3
 	UInt32 i = 0;
 	IOReturn result;
 
-IOLog("doUnmap called with (%u) extents and options (%u)\n", (uint32_t)extentsCount, (uint32_t)options);
+//IOLog("doUnmap called with (%u) extents and options (%u)\n", (uint32_t)extentsCount, (uint32_t)options);
 
 	if (options > 0) {
-IOLog("doUnmap called with (%u) extents and options (%u)\n", (uint32_t)extentsCount, (uint32_t)options);
+//IOLog("doUnmap called with (%u) extents and options (%u)\n", (uint32_t)extentsCount, (uint32_t)options);
         return kIOReturnUnsupported;
 	}
 
