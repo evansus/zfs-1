@@ -148,6 +148,8 @@ int zvol_maxphys = DMU_MAX_ACCESS/2;
 
 extern int zfs_set_prop_nvlist(const char *, zprop_source_t,
 							   nvlist_t *, nvlist_t *);
+static void zvol_log_truncate(zvol_state_t *zv, dmu_tx_t *tx, uint64_t off,
+							  uint64_t len, boolean_t sync);
 static int zvol_remove_zv(zvol_state_t *);
 static int zvol_get_data(void *arg, lr_write_t *lr, char *buf, zio_t *zio);
 //static int zvol_dumpify(zvol_state_t *zv);
@@ -1881,8 +1883,7 @@ zvol_unmap(zvol_state_t *zv, uint64_t off, uint64_t bytes)
 	dmu_tx_t *tx		= 0;
 	uint64_t volsize	= 0;
 	int error			= 0;
-	boolean_t sync;
-
+	
 	if (zv == NULL)
 		return (ENXIO);
 
@@ -1891,40 +1892,52 @@ zvol_unmap(zvol_state_t *zv, uint64_t off, uint64_t bytes)
 	if (bytes > volsize - off)	/* don't write past the end */
 		bytes = volsize - off;
 
-	sync = !(zv->zv_flags & ZVOL_WCE) ||
-	(zv->zv_objset->os_sync == ZFS_SYNC_ALWAYS);
-
 	rl = zfs_range_lock(&zv->zv_znode, off, bytes, RL_WRITER);
 
 	tx = dmu_tx_create(zv->zv_objset);
-
-	dmu_tx_hold_write(tx, ZVOL_OBJ, off, bytes);
 
 	error = dmu_tx_assign(tx, TXG_WAIT);
 
 	if (error) {
 		dmu_tx_abort(tx);
-		goto error;
+	} else {
+
+		zvol_log_truncate(zv, tx, off, bytes, B_TRUE);
+
+		dmu_tx_commit(tx);
+
+		error = dmu_free_long_range(zv->zv_objset, ZVOL_OBJ, off, bytes);
 	}
-
-//	error = dmu_free_long_range(zv->zv_objset, ZVOL_OBJ, off, bytes);
-	error =	dmu_free_range(zv->zv_objset, ZVOL_OBJ, off, bytes, tx);
-
-	if (error == 0)
-		zvol_log_write(zv, tx, off, bytes, sync);
-
-	dmu_tx_commit(tx);
-
-error:
 
 	zfs_range_unlock(rl);
 
-	if (sync)
-		zil_commit(zv->zv_zilog, ZVOL_OBJ);
+	if (error == 0) {
+		/*
+		 * If the write-cache is disabled or 'sync' property
+		 * is set to 'always' then treat this as a synchronous
+		 * operation (i.e. commit to zil).
+		 */
+		if (!(zv->zv_flags & ZVOL_WCE) ||
+			(zv->zv_objset->os_sync == ZFS_SYNC_ALWAYS)) {
+
+			zil_commit(zv->zv_zilog, ZVOL_OBJ);
+
+		}
+
+		/*
+		 * If the caller really wants synchronous writes, and
+		 * can't wait for them, don't return until the write
+		 * is done.
+		 *
+		 * XXX To do - forced async to test
+		 */
+		if (0) {
+			txg_wait_synced(dmu_objset_pool(zv->zv_objset), 0);
+		}
+	}
 
 	return error;
 }
-
 
 int
 zvol_getefi(void *arg, int flag, uint64_t vs, uint8_t bs)
@@ -2100,7 +2113,6 @@ zvol_log_write_minor(void *minor_hdl, dmu_tx_t *tx, offset_t off, ssize_t resid,
 /*
  * Log a DKIOCFREE/free-long-range to the ZIL with TX_TRUNCATE.
  */
-#if 0 // unused function
 static void
 zvol_log_truncate(zvol_state_t *zv, dmu_tx_t *tx, uint64_t off, uint64_t len,
 				  boolean_t sync)
@@ -2121,7 +2133,6 @@ zvol_log_truncate(zvol_state_t *zv, dmu_tx_t *tx, uint64_t off, uint64_t len,
 	itx->itx_sync = sync;
 	zil_itx_assign(zilog, itx, tx);
 }
-#endif
 
 /*
  * Dirtbag ioctls to support mkfs(1M) for UFS filesystems.  See dkio(7I).
