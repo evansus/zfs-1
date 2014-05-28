@@ -2207,7 +2207,10 @@ zvol_ioctl(dev_t dev, unsigned long cmd, caddr_t data, int isblk, cred_t *cr, in
 			
 		case DKIOCISWRITABLE:
 			dprintf("DKIOCISWRITABLE\n");
-			*f = 1;
+			if (zv && (zv->zv_flags & ZVOL_RDONLY))
+				*f = 0;
+			else
+				*f = 1;
 			break;
 			
 		case DKIOCGETBLOCKCOUNT32:
@@ -2250,7 +2253,8 @@ zvol_ioctl(dev_t dev, unsigned long cmd, caddr_t data, int isblk, cred_t *cr, in
 			
 #ifdef DKIOCUNMAP
 		case DKIOCUNMAP:
-			*f = 0;
+			dprintf("DKIOCUNMAP\n");
+			*f = 1;
 			break;
 #endif
 			
@@ -2260,6 +2264,7 @@ zvol_ioctl(dev_t dev, unsigned long cmd, caddr_t data, int isblk, cred_t *cr, in
 			
 #ifdef DKIOCISSOLIDSTATE
 		case DKIOCISSOLIDSTATE:
+			dprintf("DKIOCISSOLIDSTATE\n");
 			*f = 0;
 			break;
 #endif
@@ -2277,8 +2282,9 @@ zvol_ioctl(dev_t dev, unsigned long cmd, caddr_t data, int isblk, cred_t *cr, in
 			break;
 			
 		case DKIOCSYNCHRONIZECACHE:
+			dprintf("DKIOCSYNCHRONIZECACHE\n");
 			break;
-			
+
 		default:
 			dprintf("unknown ioctl: ENOTTY\n");
 			error = ENOTTY;

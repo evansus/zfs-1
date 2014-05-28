@@ -400,7 +400,6 @@ net_lundman_zfs_zvol_device::doUnmap( IOBlockStorageDeviceExtent *extents, UInt3
 //IOLog("doUnmap called with (%u) extents and options (%u)\n", (uint32_t)extentsCount, (uint32_t)options);
 
 	if (options > 0) {
-//IOLog("doUnmap called with (%u) extents and options (%u)\n", (uint32_t)extentsCount, (uint32_t)options);
         return kIOReturnUnsupported;
 	}
 
