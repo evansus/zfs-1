@@ -1915,6 +1915,9 @@ get_numeric_property(zfs_handle_t *zhp, zfs_prop_t prop, zprop_source_t *src,
 	case ZFS_PROP_REFQUOTA:
 	case ZFS_PROP_RESERVATION:
 	case ZFS_PROP_REFRESERVATION:
+#ifdef __APPLE__
+	case ZFS_PROP_APPLE_BLOCKSIZE:
+#endif
 		*val = getprop_uint64(zhp, prop, source);
 
 		if (*source == NULL) {

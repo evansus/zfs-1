@@ -55,6 +55,7 @@ typedef struct zvol_state {
 	char		zv_name[MAXPATHLEN]; /* pool/dd name */
 	uint64_t	zv_volsize;	/* amount of space we advertise */
 	uint64_t	zv_volblocksize; /* volume block size */
+	uint64_t	zv_logicalblocksize; /* logical block size */
 	minor_t		zv_minor;	/* minor number */
 	uint8_t		zv_min_bs;	/* minimum addressable block shift */
 	uint8_t		zv_flags;	/* readonly, dumpified, etc. */

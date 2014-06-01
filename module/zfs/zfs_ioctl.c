@@ -3097,6 +3097,18 @@ zfs_ioc_create(const char *fsname, nvlist_t *innvl, nvlist_t *outnvl)
 			return (SET_ERROR(EINVAL));
 
 		if ((error = nvlist_lookup_uint64(nvprops,
+						zfs_prop_to_name(ZFS_PROP_APPLE_BLOCKSIZE),
+						&volblocksize)) != 0) {
+			if ((error = zvol_check_volblocksize(
+						volblocksize)) != 0 ||
+				(error = zvol_check_volsize(volsize,
+						volblocksize)) != 0) {
+				return (error);
+			}
+		}
+
+		if ((error = nvlist_lookup_uint64(nvprops,
+
 										  zfs_prop_to_name(ZFS_PROP_VOLBLOCKSIZE),
 										  &volblocksize)) != 0 && error != ENOENT)
 			return (SET_ERROR(EINVAL));

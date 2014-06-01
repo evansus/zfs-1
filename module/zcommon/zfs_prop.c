@@ -465,6 +465,11 @@ zfs_prop_init(void)
         ZFS_TYPE_FILESYSTEM, "on | off", "COM.APPLE.BROWSE", boolean_table);
 	zprop_register_index(ZFS_PROP_APPLE_IGNOREOWNER, "com.apple.ignoreowner", 0, PROP_INHERIT,
 	    ZFS_TYPE_FILESYSTEM, "on | off", "COM.APPLE.IGNOREOWNER", boolean_table);
+	zprop_register_number(ZFS_PROP_APPLE_BLOCKSIZE,
+			"com.apple.blocksize", ZVOL_APPLE_BLOCKSIZE,
+			PROP_INHERIT, ZFS_TYPE_VOLUME,
+			"512 to 128k, power of 2",
+			"COM.APPLE.BLOCKSIZE");
 #endif
 
 

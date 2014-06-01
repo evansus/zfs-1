@@ -574,6 +574,11 @@ zvol_create_minor(const char *name)
     // set here.
 	error = zap_lookup(os, ZVOL_ZAP_OBJ, "size", 8, 1, &zv->zv_volsize);
 
+	error = dsl_prop_get_integer(zv->zv_name, zfs_prop_to_name(ZFS_PROP_APPLE_BLOCKSIZE), &zv->zv_logicalblocksize, NULL);
+
+	if (zv->zv_logicalblocksize == 0)
+		zv->zv_logicalblocksize =	DEV_BSIZE;
+
 	dmu_objset_disown(os, FTAG);
 	zv->zv_objset = NULL;
 

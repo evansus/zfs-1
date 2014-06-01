@@ -145,6 +145,7 @@ typedef enum {
 #ifdef __APPLE__
     ZFS_PROP_APPLE_BROWSE,
     ZFS_PROP_APPLE_IGNOREOWNER,
+	ZFS_PROP_APPLE_BLOCKSIZE,
 #endif
 #ifdef LINUX
 	ZFS_PROP_ACLTYPE,
@@ -788,6 +789,7 @@ typedef struct ddt_histogram {
 
 #define	ZVOL_DEFAULT_BLOCKSIZE	8192
 
+#define	ZVOL_APPLE_BLOCKSIZE	DEV_BSIZE
 
 /*
  * zvol ioctl to get dataset name
