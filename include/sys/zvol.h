@@ -71,10 +71,13 @@ typedef struct zvol_state {
 	znode_t zv_znode;	/* for range locking */
 #endif
 	dmu_buf_t *zv_dbuf;	/* bonus handle */
+#ifdef __APPLE__
 	void *zv_iokitdev;	/* C++ reference to IOKit class */
 	uint64_t zv_openflags;	/* Remember flags used at open */
 	char zv_bsdname[MAXPATHLEN];
 	/* 'rdiskX' name, use [1] for diskX */
+	uint8_t zv_autodiskmount;	/* Should zvol be automounted */
+#endif
 } zvol_state_t;
 
 enum zfs_soft_state_type {
@@ -92,6 +95,9 @@ typedef enum {
 	ZVOL_ASYNC_REMOVE_MINORS,
 	ZVOL_ASYNC_RENAME_MINORS,
 	ZVOL_ASYNC_SET_SNAPDEV,
+#ifdef __APPLE__
+	ZVOL_ASYNC_SET_AUTODISKMOUNT,
+#endif
 	ZVOL_ASYNC_MAX
 } zvol_async_op_t;
 
@@ -118,6 +124,10 @@ extern void zvol_remove_minors_symlink(const char *name);
 extern int zvol_set_volsize(const char *, uint64_t);
 extern int zvol_set_volblocksize(const char *, uint64_t);
 extern int zvol_set_snapdev(const char *, zprop_source_t, uint64_t);
+
+#ifdef __APPLE__
+extern int zvol_set_autodiskmount(const char *, zprop_source_t, uint64_t);
+#endif
 
 extern int zvol_open(dev_t dev, int flag, int otyp, struct proc *p);
 extern int zvol_close(dev_t dev, int flag, int otyp, struct proc *p);

@@ -65,6 +65,17 @@ extern "C" {
  */
 #define	ZFS_SNAPDEV_HIDDEN		0
 #define	ZFS_SNAPDEV_VISIBLE		1
+
+#if 0
+#ifdef __APPLE__
+/*
+ * Property values for autodiskmount
+ */
+#define	ZFS_AUTODISKMOUNT_OFF		0
+#define	ZFS_AUTODISKMOUNT_ON		1
+#endif
+#endif
+
 /*
  * Property values for acltype
  */

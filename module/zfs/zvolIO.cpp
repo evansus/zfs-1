@@ -49,6 +49,7 @@ net_lundman_zfs_zvol_device::attach(IOService* provider)
 	OSDictionary *protocolCharacteristics = 0;
 	OSDictionary *deviceCharacteristics = 0;
 	OSDictionary *storageFeatures = 0;
+	OSBoolean *autoDiskMount = 0;
 	OSBoolean *unmapFeature = 0;
 	OSString *dataString = 0;
 	OSNumber *dataNumber = 0;
@@ -123,6 +124,13 @@ net_lundman_zfs_zvol_device::attach(IOService* provider)
 		IOLog("failed to create dict for deviceCharacteristics.\n");
 		return (true);
 	}
+
+	// setProperty("autodiskmount", kOSBooleanFalse);
+
+	autoDiskMount = OSBoolean::withBoolean(zv->zv_autodiskmount);
+	setProperty("autodiskmount", autoDiskMount);
+	autoDiskMount->release();
+	autoDiskMount = 0;
 
 	/* Set logical block size to ZVOL_BSIZE (512b) */
 	dataNumber =	OSNumber::withNumber(ZVOL_BSIZE,

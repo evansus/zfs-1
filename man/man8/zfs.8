@@ -343,6 +343,9 @@ A snapshot is a read-only copy of a file system or volume. Snapshots can be crea
 Snapshots can have arbitrary names. Snapshots of volumes can be cloned or rolled back.  Visibility is determined by the \fBsnapdev\fR property of the parent volume.
 .sp
 .LP
+On Mac OS X, zvol devices can decline automatic mount of filesystems by setting the \fBautodiskmount\fB property to off.
+.sp
+.LP
 File system snapshots can be accessed under the \fB\&.zfs/snapshot\fR directory in the root of the file system. Snapshots are automatically mounted on demand and may be unmounted at regular intervals. The visibility of the \fB\&.zfs\fR directory can be controlled by the \fBsnapdir\fR property.
 .SS "Bookmarks"
 .LP
@@ -1312,6 +1315,17 @@ When the \fBsharenfs\fR property is changed for a dataset, the dataset and any c
 .sp .6
 .RS 4n
 Provide a hint to ZFS about handling of synchronous requests in this dataset. If \fBlogbias\fR is set to \fBlatency\fR (the default), ZFS will use pool log devices (if configured) to handle the requests at low latency. If \fBlogbias\fR is set to \fBthroughput\fR, ZFS will not use configured pool log devices. ZFS will instead optimize synchronous operations for global pool throughput and efficient use of resources.
+.RE
+
+.sp
+.ne 2
+.mk
+.na
+\fB\fBautodiskmount\fR=\fBon\fR | \fBoff\fR\fR
+.ad
+.sp .6
+.RS 4n
+On Mac OS X, controls whether zvol devices should automatically mount contained filesystems after pool import or on zvol creation, clone, or receive. The default value is \fBoff\fR.
 .RE
 
 .sp

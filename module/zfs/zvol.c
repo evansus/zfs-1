@@ -579,8 +579,10 @@ zvol_create_minor_impl(const char *name)
 			zil_replay(os, zv, zvol_replay_vector);
 	}
 
-	// Call IOKit to create a new ZVOL device, we like the size being
-	// set here.
+#ifdef __APPLE__
+	/* Will be looked up in zvol_first_open */
+	zv->zv_autodiskmount = 0;
+#endif
 
 	dmu_objset_disown(os, FTAG);
 	zv->zv_objset = NULL;
@@ -781,6 +783,7 @@ zvol_first_open(zvol_state_t *zv)
 	uint64_t volsize;
 	int error;
 	uint64_t readonly;
+	uint64_t autodiskmount = 0;
 
 	dprintf("zvol_first_open: '%s'\n", zv->zv_name);
 
@@ -814,6 +817,15 @@ zvol_first_open(zvol_state_t *zv)
 	if (error)
 		printf("ZFS: Failed to lookup 'readonly' on '%s' error %d\n",
 			   zv->zv_name, error);
+
+	error = dsl_prop_get_integer(zv->zv_name, "autodiskmount",
+	    &autodiskmount, NULL);
+	if (error)
+		printf("ZFS: Failed to lookup 'autodiskmount' on '%s' error %d\n",
+			   zv->zv_name, error);
+	zv->zv_autodiskmount = autodiskmount;
+printf("zfs: zvol_first_open autodiskmount %lld\n", autodiskmount);
+
 #else
 	VERIFY(dsl_prop_get_integer(zv->zv_name, "readonly", &readonly,
 	    NULL) == 0);
@@ -1353,6 +1365,13 @@ zvol_set_snapdev(const char *ddname, zprop_source_t source, uint64_t snapdev)
 	zsda.zsda_value = snapdev;
 	return (dsl_sync_task(ddname, zvol_set_snapdev_check,
 						  zvol_set_snapdev_sync, &zsda, 0, ZFS_SPACE_CHECK_NONE));
+}
+
+int
+zvol_set_autodiskmount(const char *ddname, zprop_source_t source,
+    uint64_t autodiskmount)
+{
+	return (EINVAL);
 }
 
 void

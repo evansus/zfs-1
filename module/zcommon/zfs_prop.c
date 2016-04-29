@@ -125,6 +125,16 @@ zfs_prop_init(void)
 		{ NULL }
 	};
 
+#if 0
+#ifdef __APPLE__
+	static zprop_index_t autodiskmount_table[] = {
+		{ "off",	ZFS_AUTODISKMOUNT_OFF },
+		{ "on",		ZFS_AUTODISKMOUNT_ON },
+		{ NULL }
+	};
+#endif
+#endif
+
 #ifdef __LINUX__
 	static zprop_index_t acltype_table[] = {
 		{ "off",	ZFS_ACLTYPE_OFF },
@@ -268,6 +278,11 @@ zfs_prop_init(void)
 	zprop_register_index(ZFS_PROP_SNAPDEV, "snapdev", ZFS_SNAPDEV_HIDDEN,
 	    PROP_INHERIT, ZFS_TYPE_FILESYSTEM | ZFS_TYPE_VOLUME,
 	    "hidden | visible", "SNAPDEV", snapdev_table);
+#ifdef __APPLE__
+	zprop_register_index(ZFS_PROP_AUTODISKMOUNT, "autodiskmount", 0,
+	    PROP_INHERIT, ZFS_TYPE_FILESYSTEM | ZFS_TYPE_VOLUME,
+	    "on | off", "AUTODISKMOUNT", boolean_table);
+#endif
 #ifdef LINUX
 	zprop_register_index(ZFS_PROP_ACLTYPE, "acltype", ZFS_ACLTYPE_OFF,
 	    PROP_INHERIT, ZFS_TYPE_FILESYSTEM | ZFS_TYPE_SNAPSHOT,
