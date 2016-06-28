@@ -103,6 +103,7 @@ typedef enum drr_headertype {
 /* flag #18 is reserved for a Delphix feature */
 #define	DMU_BACKUP_FEATURE_LARGE_BLOCKS		(1 << 19)
 #define	DMU_BACKUP_FEATURE_RESUMING		(1 << 20)
+#define	DMU_BACKUP_FEATURE_LARGE_DNODE		(1<<21)
 
     /* Unsure what Oracle called this bit */
 #define	DMU_BACKUP_FEATURE_SPILLBLOCKS	(0x20)
@@ -120,7 +121,6 @@ NOTE 3:  Fix to 7097870 (spill block can be dropped in some situations during
          of ZFS is required in destination for ZFS streams to work properly.
     */
 
-
 /*
  * Mask of all supported backup features
  */
@@ -128,7 +128,7 @@ NOTE 3:  Fix to 7097870 (spill block can be dropped in some situations during
     DMU_BACKUP_FEATURE_DEDUPPROPS | DMU_BACKUP_FEATURE_SA_SPILL | \
     DMU_BACKUP_FEATURE_EMBED_DATA | DMU_BACKUP_FEATURE_EMBED_DATA_LZ4 | \
     DMU_BACKUP_FEATURE_RESUMING | \
-    DMU_BACKUP_FEATURE_LARGE_BLOCKS)
+    DMU_BACKUP_FEATURE_LARGE_BLOCKS | DMU_BACKUP_FEATURE_LARGE_DNODE)
 
 /* Are all features in the given flag word currently supported? */
 #define	DMU_STREAM_SUPPORTED(x)	(!((x) & ~DMU_BACKUP_FEATURE_MASK))
@@ -214,7 +214,8 @@ typedef struct dmu_replay_record {
 			uint32_t drr_bonuslen;
 			uint8_t drr_checksumtype;
 			uint8_t drr_compress;
-			uint8_t drr_pad[6];
+			uint8_t drr_dn_slots;
+			uint8_t drr_pad[5];
 			uint64_t drr_toguid;
 			/* bonus content follows */
 		} drr_object;
