@@ -97,6 +97,7 @@ KERNEL_H = \
 	${top_srcdir}/include/sys/zpl.h \
 	$(top_srcdir)/include/sys/zvol.h \
 	$(top_srcdir)/include/sys/zvolIO.h \
+	$(top_srcdir)/include/sys/ZFSDataset.h \
 	$(top_srcdir)/include/sys/ZFSPool.h
 
 USER_H =

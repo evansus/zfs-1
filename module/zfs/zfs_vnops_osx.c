@@ -4698,9 +4698,17 @@ zfs_vfsops_init(void)
 	 * Note: must set VFS_TBLGENERICMNTARGS with VFS_TBLLOCALVOL
 	 * to suppress local mount argument handling.
 	 */
+/*
 	vfe.vfe_flags = VFS_TBLTHREADSAFE | VFS_TBLNOTYPENUM | VFS_TBLLOCALVOL |
 	    VFS_TBL64BITREADY | VFS_TBLNATIVEXATTR | VFS_TBLGENERICMNTARGS |
 	    VFS_TBLREADDIR_EXTENDED;
+*/
+	/*
+	 * vfs_fsadd (in xnu kpi_vfs.c) will only set LOCALARGS iff
+	 * both LOCALVOL is set and GENERICMNTARGS is not set.
+	 */
+	vfe.vfe_flags = VFS_TBLTHREADSAFE | VFS_TBLNOTYPENUM | VFS_TBLLOCALVOL |
+	    VFS_TBL64BITREADY | VFS_TBLNATIVEXATTR | VFS_TBLREADDIR_EXTENDED;
 #if	HAVE_PAGEOUT_V2
 	vfe.vfe_flags |= VFS_TBLVNOP_PAGEOUTV2;
 #endif

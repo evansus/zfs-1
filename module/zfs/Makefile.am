@@ -146,6 +146,7 @@ zfs_SOURCES = \
 	zrlock.c \
 	zvol.c \
 	zvolIO.cpp \
+	ZFSDataset.cpp \
 	ZFSPool.cpp \
 	../nvpair/fnvpair.c \
 	../nvpair/nvpair.c \

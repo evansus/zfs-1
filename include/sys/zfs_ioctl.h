@@ -538,6 +538,14 @@ typedef enum zfs_ioc {
 	ZFS_IOC_FREEBSD = ('Z' << 8) + 0xC0,
 #endif
 
+#ifdef __APPLE__
+	/*
+	 * Apple - 1/64 numbers reserved.
+	 */
+	ZFS_IOC_OSX = _IOWR('Z', 0, struct zfs_cmd) + 0xD0,
+	ZFS_IOC_PROXY_DATASET,
+#endif
+
 	ZFS_IOC_LAST
 } zfs_ioc_t;
 

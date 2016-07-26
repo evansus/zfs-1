@@ -65,41 +65,19 @@ copy_zfs_handle()
 
 OSDefineMetaClassAndStructors(ZFSPool, IOStorage);
 
+#if 0
 bool
 ZFSPool::open(IOService *client, IOOptionBits options, void *arg)
 {
-	/* XXX Does nothing at the moment */
-	return (true);
-}
+	bool ret;
 
-void
-ZFSPool::close(IOService *client, IOOptionBits options)
-{
-	/* XXX Does nothing at the moment */
-	return;
-}
-
-bool
-ZFSPool::handleOpen(IOService *client,
-    IOOptionBits options, void *access)
-{
 	IOLog("ZFSPool %s\n", __func__);
-	return (IOService::handleOpen(client, options, NULL));
-}
 
-bool
-ZFSPool::handleIsOpen(const IOService *client) const
-{
-	IOLog("ZFSPool %s\n", __func__);
-	return (IOService::handleIsOpen(client));
-}
+	ret = IOService::open(client, options, arg);
 
-void
-ZFSPool::handleClose(IOService *client,
-    IOOptionBits options)
-{
-	IOLog("ZFSPool %s\n", __func__);
-	IOService::handleClose(client, options);
+	IOLog("ZFSPool %s ret %d\n", __func__, ret);
+
+	return (ret);
 }
 
 bool
@@ -107,6 +85,73 @@ ZFSPool::isOpen(const IOService *forClient) const
 {
 	IOLog("ZFSPool %s\n", __func__);
 	return (false);
+}
+
+void
+ZFSPool::close(IOService *client, IOOptionBits options)
+{
+	IOLog("ZFSPool %s\n", __func__);
+	IOService::close(client, options);
+	return;
+}
+#endif
+
+bool
+ZFSPool::handleOpen(IOService *client,
+    IOOptionBits options, void *access)
+{
+	bool ret = true;
+
+	IOLog("ZFSPool %s\n", __func__);
+
+	/* XXX IOService open() locks for arbitration around handleOpen */
+	//lockForArbitration();
+	if (_openClients->containsObject(client)) {
+		dprintf("ZFSPool %s already open\n", __func__);
+		ret = false;
+	}
+	if (_openClients->setObject(client) == false) {
+		dprintf("ZFSPool %s already open\n", __func__);
+		ret = false;
+	}
+	//unlockForArbitration();
+
+	return (ret);
+//	return (IOService::handleOpen(client, options, NULL));
+}
+
+bool
+ZFSPool::handleIsOpen(const IOService *client) const
+{
+	bool ret;
+
+	IOLog("ZFSPool %s\n", __func__);
+
+	/* XXX IOService isOpen() locks for arbitration around handleIsOpen */
+	//lockForArbitration();
+	ret = _openClients->containsObject(client);
+	//unlockForArbitration();
+
+	return (ret);
+//	return (IOService::handleIsOpen(client));
+}
+
+void
+ZFSPool::handleClose(IOService *client,
+    IOOptionBits options)
+{
+	IOLog("ZFSPool %s\n", __func__);
+
+	/* XXX IOService close() locks for arbitration around handleClose */
+	//lockForArbitration();
+	if (_openClients->containsObject(client) == false) {
+		dprintf("ZFSPool %s not open\n", __func__);
+	}
+	/* Remove client from set */
+	_openClients->removeObject(client);
+	//unlockForArbitration();
+
+//	IOService::handleClose(client, options);
 }
 
 void
@@ -130,16 +175,40 @@ ZFSPool::write(IOService *client, UInt64 byteStart,
 bool
 ZFSPool::init(OSDictionary *options, spa_t *spa)
 {
+	/* Call superclass init */
 	if (IOService::init(options) == false) {
 		printf("ZFSPool IOService::init failed\n");
 		return (false);
 	}
 
-	_spa = spa;
+	/* Need an OSSet for open clients */
+	_openClients = OSSet::withCapacity(1);
+	if (_openClients == NULL) {
+		dprintf("ZFSPool init client OSSet failed\n");
+		return (false);
+	}
 
+	/* Set spa pointer and this Pool object's name to match */
+	_spa = spa;
 	setName(spa_name(spa));
 
 	return (true);
+}
+
+void
+ZFSPool::free()
+{
+	OSSet *oldSet;
+
+	if (_openClients) {
+		oldSet = _openClients;
+		_openClients = 0;
+		oldSet->release();
+		oldSet = 0;
+	}
+	_spa = 0;
+
+	IOService::free();
 }
 
 extern "C" {

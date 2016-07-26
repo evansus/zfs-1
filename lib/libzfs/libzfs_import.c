@@ -1143,7 +1143,7 @@ void signal_alarm(int foo)
 {
 	longjmp(buffer, 1);
 }
-#endif
+#endif /* __APPLE__ */
 
 static void
 zpool_open_func(void *arg)

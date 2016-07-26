@@ -102,6 +102,7 @@
 #include <sys/zfs_vnops.h>
 #include <sys/systeminfo.h>
 #include <sys/zfs_mount.h>
+#include <sys/ZFSDataset.h>
 #endif /* __APPLE__ */
 
 //#define dprintf kprintf
@@ -1553,6 +1554,10 @@ zfs_set_fuid_feature(zfsvfs_t *zfsvfs)
 	zfsvfs->z_use_sa = USE_SA(zfsvfs->z_version, zfsvfs->z_os);
 }
 
+#ifdef __APPLE__
+#include <sys/ZFSDataset.h>
+#endif
+
 static int
 zfs_domount(struct mount *vfsp, dev_t mount_dev, char *osname, vfs_context_t ctx)
 {
@@ -1563,6 +1568,7 @@ dprintf("%s\n", __func__);
 	uint64_t recordsize, fsid_guid;
 	vnode_t *vp;
 #else
+	//char *mountpoint = 0;
 	uint64_t mimic_hfs = 0;
 	struct timeval tv;
 #endif
@@ -1587,8 +1593,35 @@ dprintf("%s\n", __func__);
 	ASSERT(vfs_devismounted(mount_dev) == 0);
 #endif
 
-
 #ifdef __APPLE__
+	if (!mount_dev) {
+		/* XXX create a proxy device */
+		error = spa_iokit_dataset_proxy_create(osname);
+#if 0
+		/* Check to see if this is a legacy mountpoint */
+		if (error = (dsl_prop_get_string(osname, ZFS_MOUNTPOINT,
+		    &mountpoint) != 0)) {
+			error = ENODEV;
+			goto out;
+		}
+		if (strcmp(mountpoint, ZFS_MOUNTPOINT_LEGACY) == 0) {
+#endif
+
+
+			if (error == EAGAIN) {
+				/* Mask out EAGAIN, just in case */
+				error = ENODEV;
+			}
+			if (error == 0) {
+				/* Tell caller to get bsd name and remount */
+				error = EAGAIN;
+			}
+			goto out;
+#if 0
+		}
+#endif
+	}
+
 	zfsvfs->z_rdev = mount_dev;
 
 	/* HFS sets this prior to mounting */
@@ -2168,6 +2201,7 @@ zfs_vfs_mount(struct mount *vfsp, vnode_t *mvp /*devvp*/,
     struct zfs_mount_args mnt_args;
 	size_t		osnamelen = 0;
 	uint32_t	cmdflags = 0;
+	dev_t		dev = 0;
 
 dprintf("%s\n", __func__);
 	cmdflags = (uint32_t) vfs_flags(vfsp) & MNT_CMDFLAGS;
@@ -2178,6 +2212,39 @@ dprintf("%s cmdflags %u rdonly %d\n", __func__, cmdflags, rdonly);
 		printf("%s: missing data\n", __func__);
 		return (EINVAL);
 	}
+
+#if 1
+	if (mvp != NULLVP) {
+		const char *dev_name;
+
+		osname = kmem_alloc(MAXPATHLEN, KM_SLEEP);
+		if (!osname) {
+			printf("%s osname alloc failed\n", __func__);
+			goto out;
+		}
+
+		vnode_get(mvp);
+		dev_name = vnode_getname(mvp);
+
+		error = EINVAL;
+		if (dev_name) {
+			error = zfs_dataset_proxy_get_osname(dev_name,
+			    osname, MAXPATHLEN);
+			vnode_putname(dev_name);
+		}
+
+		dev = vnode_specrdev(mvp);
+		vnode_put(mvp);
+
+		printf("%s error %d got dev_t %d and osname %s\n", __func__,
+		    error, dev, osname);
+
+		if (error) goto out;
+
+	} else {
+		printf("%s no mvp\n", __func__);
+	}
+#else
 	/*
 	* Get the objset name (the "special" mount argument).
 	*/
@@ -2216,17 +2283,32 @@ dprintf("%s cmdflags %u rdonly %d\n", __func__, cmdflags, rdonly);
 			//cmn_err(CE_NOTE, "%s: error on osname copyin %d",
 			printf("%s: error on osname copyin %d\n",
 			__func__, error);
-			goto out;
+			if (!mvp)
+				goto out;
 		}
 	}
+#endif
 
+#if 0
 	if (strncmp(osname, "/dev/disk", 9) == 0 &&
 	    (vfs_flags(vfsp) & MNT_ROOTFS) == 0) {
 		printf("%s osname %s skip\n", __func__, osname);
 		error = ENODEV;
 		goto out;
 	}
-
+#endif
+#if 0
+	if (strncmp(osname, "/dev/disk", 9) == 0) {
+		error = zfs_dataset_proxy_get_osname(osname, MAXPATHLEN);
+		if (error != 0) {
+			printf("%s couldn't get dataset from %s\n",
+			    __func__, osname);
+			error = ENOENT;
+			goto out;
+		}
+		printf("%s got new osname %s\n", __func__, osname);
+	}
+#endif
 
 	if (mnt_args.struct_size == sizeof(mnt_args)) {
 
@@ -2237,9 +2319,10 @@ dprintf("%s cmdflags %u rdonly %d\n", __func__, cmdflags, rdonly);
 		error = ddi_copyin((const void *)mnt_args.optptr, (caddr_t)options,
 						   mnt_args.optlen, 0);
 	//dprintf("vfs_mount: fspec '%s' : mflag %04llx : optptr %p : optlen %d :"
-	printf("%s: fspec '%s' : mflag %04x : optptr %p : optlen %d :"
+	printf("%s: fspec '%s' : osname '%s' : mflag %04x : optptr %p : optlen %d :"
 	    " options %s\n", __func__,
 	    mnt_args.fspec,
+	    osname,
 	    mnt_args.mflag,
 	    mnt_args.optptr,
 	    mnt_args.optlen,
@@ -2302,6 +2385,7 @@ dprintf("%s cmdflags %u rdonly %d\n", __func__, cmdflags, rdonly);
 		return (EINVAL);
 #endif	/* ! illumos */
 
+#ifdef __FreeBSD__
 	/*
 	 * If full-owner-access is enabled and delegated administration is
 	 * turned on, we must set nosuid.
@@ -2364,6 +2448,7 @@ dprintf("%s cmdflags %u rdonly %d\n", __func__, cmdflags, rdonly);
 		error = EPERM;
 		goto out;
 	}
+#endif /* __FreeBSD__ */
 
 #ifdef SECLABEL
 	error = zfs_mount_label_policy(vfsp, osname);
@@ -2465,7 +2550,7 @@ dprintf("%s cmdflags %u rdonly %d\n", __func__, cmdflags, rdonly);
 //dprintf("%s: calling zfs_domount\n", __func__);
 #endif
 
-	error = zfs_domount(vfsp, 0, osname, context);
+	error = zfs_domount(vfsp, dev, osname, context);
 
 	if (error) {
 		//cmn_err(CE_NOTE, "%s: zfs_domount returned %d\n",
@@ -3036,6 +3121,15 @@ zfs_vfs_root(struct mount *mp, vnode_t **vpp, __unused vfs_context_t context)
 	zfsvfs_t *zfsvfs = vfs_fsprivate(mp);
 	znode_t *rootzp;
 	int error;
+
+	if (!zfsvfs) {
+		struct vfsstatfs *stat = 0;
+		if (mp) stat = vfs_statfs(mp);
+		if (stat) printf("%s mp on %s from %s\n", __func__,
+		    stat->f_mntonname, stat->f_mntfromname);
+		printf("%s no zfsvfs yet for mp\n", __func__);
+		return (EINVAL);
+	}
 
 	ZFS_ENTER_NOERROR(zfsvfs);
 

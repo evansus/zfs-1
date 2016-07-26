@@ -99,7 +99,9 @@
 
 #define MNTTAB "/etc/mtab"
 
+#if 0
 static int mnttab_file_create(void);
+#endif
 #endif
 
 //#define dprintf printf
@@ -161,6 +163,10 @@ static int zfs_fill_zplprops_root(uint64_t, nvlist_t *, nvlist_t *,
 								  boolean_t *);
 int zfs_set_prop_nvlist(const char *, zprop_source_t, nvlist_t *, nvlist_t *);
 static int get_nvlist(uint64_t nvl, uint64_t size, int iflag, nvlist_t **nvp);
+
+#ifdef __APPLE__
+static int zfs_ioc_osx_proxy_dataset(zfs_cmd_t *zc);
+#endif
 
 static void
 history_str_free(char *buf)
@@ -5666,6 +5672,10 @@ zfs_ioctl_init(void)
 							  zfs_secpolicy_config, NO_NAME, B_FALSE, POOL_CHECK_NONE);
 	zfs_ioctl_register_legacy(ZFS_IOC_EVENTS_SEEK, zfs_ioc_events_seek,
 							  zfs_secpolicy_config, NO_NAME, B_FALSE, POOL_CHECK_NONE);
+#ifdef __APPLE__
+	zfs_ioctl_register_legacy(ZFS_IOC_PROXY_DATASET, zfs_ioc_osx_proxy_dataset,
+	    zfs_secpolicy_config, NO_NAME, B_FALSE, POOL_CHECK_NONE);
+#endif /* __APPLE__ */
 }
 
 
@@ -6191,6 +6201,7 @@ static void * zfs_devnode = NULL;
 
 #define ZFS_MAJOR  -24
 
+#if 0
 #ifdef __APPLE__
 static int
 mnttab_file_create(void)
@@ -6211,6 +6222,7 @@ mnttab_file_create(void)
 		printf("mnttab_file_create : error %d\n", error);
 	return error;
 }
+#endif /* __APPLE__ */
 #endif
 
 static int
@@ -6323,9 +6335,6 @@ zfs_allow_log_destroy(void *arg)
 #else
 #define	ZFS_DEBUG_STR	""
 #endif
-
-
-
 
 int
 zfs_ioctl_osx_init(void)
@@ -6449,5 +6458,56 @@ zfs_ioctl_osx_fini(void)
 	printf("ZFS: Unloaded module v%s-%s%s\n", ZFS_META_VERSION,
 	    ZFS_META_RELEASE, ZFS_DEBUG_STR);
 
+	return (error);
+}
+
+/* for spa_iokit_dataset_proxy_create */
+#include <sys/ZFSDataset.h>
+
+/*
+ * inputs:
+ * zc_name		name of the pool
+ *
+ * outputs:
+ * zc_cookie		real errno
+ * zc_nvlist_dst	config nvlist
+ * zc_nvlist_dst_size	size of config nvlist
+ */
+
+/*
+ * inputs:
+ * zc_name:		name of dataset
+ *
+ * outputs:
+ * zc_cookie		real errno
+ */
+static int
+zfs_ioc_osx_proxy_dataset(zfs_cmd_t *zc)
+{
+	//nvlist_t *config;
+	int error;
+	const char *osname;
+
+//	if ((error = get_nvlist(zc->zc_nvlist_conf, zc->zc_nvlist_conf_size,
+//	    zc->zc_iflags, &config)) != 0)
+//		return (error);
+
+	/* XXX Get osname */
+	osname = zc->zc_name;
+
+//	error = spa_iokit_dataset_proxy_create(config);
+	error = spa_iokit_dataset_proxy_create(osname);
+
+//	if (config == NULL)
+//		return (SET_ERROR(EINVAL));
+	if (error) {
+		zc->zc_cookie = ENXIO;
+		return (SET_ERROR(ENXIO));
+	}
+
+//	error = put_nvlist(zc, config);
+//	nvlist_free(config);
+
+	zc->zc_cookie = 0;
 	return (error);
 }

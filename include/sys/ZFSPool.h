@@ -12,10 +12,14 @@ class ZFSPool : public IOStorage {
 	OSDeclareDefaultStructors(ZFSPool);
 
 protected:
+#if 0
+	/* XXX Only for debug tracing */
 	virtual bool open(IOService *client,
 	    IOOptionBits options, void *arg = 0);
+	virtual bool isOpen(const IOService *forClient = 0) const;
 	virtual void close(IOService *client,
 	    IOOptionBits options);
+#endif
 
 	virtual bool handleOpen(IOService *client,
 	    IOOptionBits options, void *access);
@@ -23,9 +27,8 @@ protected:
 	virtual void handleClose(IOService *client,
 	    IOOptionBits options);
 
-	virtual bool isOpen(const IOService *forClient = 0) const;
-
 	virtual bool init(OSDictionary *dict, spa_t *spa);
+	virtual void free();
 
 public:
 	virtual void read(IOService *client, UInt64 byteStart,
@@ -37,6 +40,7 @@ public:
 
 	static ZFSPool * withServiceAndPool(IOService *, spa_t *);
 private:
+	OSSet *_openClients;
 	spa_t *_spa;
 };
 
